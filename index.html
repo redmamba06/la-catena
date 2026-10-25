@@ -184,6 +184,18 @@ button { cursor: pointer; }
   width: 88px; height: 42px; text-align: center; border-radius: 10px; border: 1.5px solid var(--line);
   background: var(--bg); font-family: var(--f-mono); font-weight: 700; font-size: 16px;
 }
+.week-wrap { overflow-x: auto; margin-inline: -4px; }
+.week { width: 100%; border-collapse: separate; border-spacing: 4px 6px; }
+.week th { font-size: 10px; line-height: 1.2; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; text-align: center; }
+.week th:first-child, .week td:first-child { text-align: left; }
+.week td:first-child { font-family: var(--f-mono); font-weight: 700; font-size: 14px; }
+.week tr.is-today td:first-child { color: var(--accent); }
+.week input, .week button {
+  width: 100%; min-width: 46px; height: 42px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg);
+  text-align: center; font-family: var(--f-mono); font-weight: 700; font-size: 16px; padding: 0;
+}
+.week button { font-family: var(--f-body); font-size: 14px; }
+.week button[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: var(--accent-ink); }
 .foot { text-align: center; font-size: 12px; color: var(--muted); }
 
 .sheet-back { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 20; }
@@ -266,11 +278,16 @@ button { cursor: pointer; }
   </section>
 
   <section class="card">
-    <div class="card-h"><h2>Obiettivi</h2></div>
+    <div class="card-h"><h2>Settimana tipo</h2></div>
+    <p class="note">Imposta ogni giorno: ore di lezione, ore che puoi studiare, se vai in palestra e quante pagine leggere. Metti 0 dove non c'è niente. Le modifiche valgono da oggi in poi.</p>
+    <div class="week-wrap">
+      <table class="week">
+        <thead><tr><th scope="col">Giorno</th><th scope="col">Lezione<br>ore</th><th scope="col">Studio<br>ore</th><th scope="col">Palestra</th><th scope="col">Lettura<br>pag.</th></tr></thead>
+        <tbody id="week"></tbody>
+      </table>
+    </div>
+    <p class="row-v" id="week-total"></p>
     <div class="goals">
-      <div class="goal"><label for="g-study">Ore di studio al giorno</label><input id="g-study" type="number" inputmode="decimal" min="0.5" max="16" step="0.5"></div>
-      <div class="goal"><label for="g-pages">Pagine da leggere al giorno</label><input id="g-pages" type="number" inputmode="numeric" min="1" max="200" step="1"></div>
-      <div class="goal"><label for="g-gym">Allenamenti a settimana</label><input id="g-gym" type="number" inputmode="numeric" min="1" max="7" step="1"></div>
       <div class="goal"><label for="g-jolly">Giorni jolly al mese</label><input id="g-jolly" type="number" inputmode="numeric" min="0" max="5" step="1"></div>
     </div>
   </section>
@@ -315,8 +332,24 @@ button { cursor: pointer; }
   const fmtH = x => String(Math.round(x * 10) / 10).replace(".", ",");
 
   // ---- state ----
-  const fresh = () => ({ goals: { study: 3, pages: 10, gym: 4, jolly: 1 }, start: todayKey(), days: {}, timer: null });
-  const hydrate = obj => { const s = Object.assign(fresh(), obj); s.goals = Object.assign(fresh().goals, obj.goals); return s; };
+  // Settimana tipo: per ogni giorno (0 = lunedì) ore di lezione, ore di studio, palestra in programma, pagine.
+  // Ogni modifica crea un piano che vale "da oggi", così i giorni passati restano giudicati con gli obiettivi di allora.
+  const defaultWeek = () => [
+    { lesson: 4, study: 3, gym: true, pages: 10 }, { lesson: 4, study: 3, gym: false, pages: 10 },
+    { lesson: 4, study: 3, gym: true, pages: 10 }, { lesson: 4, study: 3, gym: false, pages: 10 },
+    { lesson: 4, study: 3, gym: true, pages: 10 }, { lesson: 0, study: 2, gym: true, pages: 10 },
+    { lesson: 0, study: 2, gym: false, pages: 10 },
+  ];
+  const fresh = () => ({ goals: { jolly: 1 }, plans: [{ from: todayKey(), days: defaultWeek() }], start: todayKey(), days: {}, timer: null });
+  const hydrate = obj => {
+    const s = Object.assign(fresh(), obj), og = obj.goals || {};
+    s.goals = { jolly: og.jolly ?? 1 };
+    if (!Array.isArray(obj.plans) || !obj.plans.length) {
+      // dati della versione con obiettivi fissi: diventano il primo piano
+      s.plans = [{ from: s.start, gymWeekly: og.gym ?? 4, days: Array.from({ length: 7 }, (_, i) => ({ lesson: i < 5 ? 1 : 0, study: og.study ?? 3, gym: false, pages: og.pages ?? 10 })) }];
+    }
+    return s;
+  };
   let state = fresh();
   try { const raw = localStorage.getItem(LS_KEY); if (raw) state = hydrate(JSON.parse(raw)); } catch (e) {}
 
@@ -329,12 +362,21 @@ button { cursor: pointer; }
     refresh();
   }
 
+  function planFor(k) {
+    let p = state.plans[0];
+    for (const q of state.plans) if (q.from <= k) p = q;
+    return p;
+  }
+  const dayGoal = k => planFor(k).days[dow(k)];
+  const weekGymTarget = mon => { const p = planFor(addDays(mon, 6)); return p.gymWeekly ?? p.days.filter(d => d.gym).length; };
+
   function evalDay(k) {
-    const r = rec(k), g = state.goals, missing = [];
+    const r = rec(k), g = dayGoal(k), missing = [];
     if (r.j) return { done: true, jolly: true, missing, touched: true };
     const s = r.s || 0, p = r.p || 0;
     if (s < g.study) missing.push(`studio: mancano ${fmtH(g.study - s)} h`);
-    if (dow(k) < 5 && r.l !== "si" && r.l !== "na") missing.push(r.l === "no" ? "lezione saltata" : "lezione non segnata");
+    if (g.lesson > 0 && r.l !== "si" && r.l !== "na") missing.push(r.l === "no" ? "lezione saltata" : "lezione non segnata");
+    if (g.gym && !r.g) missing.push("palestra in programma");
     if (p < g.pages) missing.push(`lettura: mancano ${g.pages - p} pagine`);
     return { done: missing.length === 0, missing, touched: !!state.days[k] && (s > 0 || p > 0 || !!r.l || !!r.g) };
   }
@@ -446,10 +488,12 @@ button { cursor: pointer; }
 
     // Lezione
     const rL = el("div", "row");
+    const lessonH = dayGoal(k).lesson;
     const hL = el("div", "row-h"); hL.append(el("span", "row-t", "Lezione"));
+    if (lessonH > 0) hL.append(el("span", "row-v", `${fmtH(lessonH)} h in programma`));
     rL.append(hL);
     let segBtns = [];
-    if (dow(k) < 5) {
+    if (lessonH > 0) {
       const seg = el("div", "seg");
       [["si", "yes", "Ci sono andato"], ["no", "no", "Saltata"], ["na", "na", "Non c'era"]].forEach(([val, cls, label]) => {
         const b = el("button", cls, label); b.dataset.v = val;
@@ -458,13 +502,14 @@ button { cursor: pointer; }
       });
       rL.append(seg);
     } else {
-      rL.append(el("p", "note", "Weekend: le lezioni non contano."));
+      rL.append(el("p", "note", "Nessuna lezione in programma."));
     }
 
     // Palestra
     const rG = el("div", "row");
     const vG = el("span", "row-v");
-    const hG = el("div", "row-h"); hG.append(el("span", "row-t", "Palestra"), vG);
+    const tG = el("span", "row-t", "Palestra");
+    const hG = el("div", "row-h"); hG.append(tG, vG);
     const tog = el("button", "toggle");
     tog.onclick = () => setDay(k, { g: !rec(k).g });
     const dots = el("div", "dots");
@@ -502,16 +547,17 @@ button { cursor: pointer; }
     container.append(rS, rL, rG, rP, rJ, status);
 
     function sync() {
-      const r = rec(k), g = state.goals, ev = evalDay(k);
+      const r = rec(k), g = dayGoal(k), ev = evalDay(k);
+      const pct = (v, goal) => goal > 0 ? Math.min(100, v / goal * 100) : 100;
       const running = state.timer && state.timer.day === k;
       const s = (r.s || 0) + (running ? timerElapsed() / 3600000 : 0), p = r.p || 0;
       const isT = k === todayKey();
       pill.className = "pill " + (ev.jolly ? "jolly" : ev.done ? "ok" : isT ? "open" : "bad");
       pill.textContent = ev.jolly ? "Jolly" : ev.done ? "Chiusa" : isT ? "Aperta" : "Non chiusa";
       vS.className = "row-v" + (s >= g.study ? " done" : "");
-      vS.innerHTML = `<b>${fmtH(s)}</b> / ${fmtH(g.study)} h`;
+      vS.innerHTML = g.study > 0 ? `<b>${fmtH(s)}</b> / ${fmtH(g.study)} h` : `<b>${fmtH(s)}</b> h · giorno libero`;
       if (document.activeElement !== inS) inS.value = r.s || 0;
-      barSi.style.width = Math.min(100, s / g.study * 100) + "%";
+      barSi.style.width = pct(s, g.study) + "%";
       barS.classList.toggle("done", s >= g.study);
       if (timerBtn) {
         const other = state.timer && !running;
@@ -521,7 +567,7 @@ button { cursor: pointer; }
         if (other) timerBtn.textContent += " (da ieri)";
       }
       const left = jollyLeft(k), month = MONTHS_IT[parse(k).getMonth()];
-      vJ.innerHTML = `<b>${left}</b> / ${g.jolly} a ${month}`;
+      vJ.innerHTML = `<b>${left}</b> / ${state.goals.jolly} a ${month}`;
       jBtn.setAttribute("aria-pressed", String(!!r.j));
       jBtn.textContent = r.j ? "Annulla il jolly" : "Usa il jolly";
       jBtn.disabled = !r.j && (left <= 0 || ev.done);
@@ -530,16 +576,17 @@ button { cursor: pointer; }
         : left <= 0 ? `Hai già usato i jolly di ${month}.`
         : "Per malattia o esami: salva la catena anche se non fai niente.";
       segBtns.forEach(b => b.setAttribute("aria-pressed", String(r.l === b.dataset.v)));
-      const wk = gymCount(mondayOf(k));
-      vG.className = "row-v" + (wk >= g.gym ? " done" : "");
-      vG.innerHTML = `<b>${wk}</b> / ${g.gym} a settimana`;
+      const wk = gymCount(mondayOf(k)), target = weekGymTarget(mondayOf(k));
+      tG.textContent = g.gym ? "Palestra · in programma" : "Palestra · riposo";
+      vG.className = "row-v" + (wk >= target ? " done" : "");
+      vG.innerHTML = `<b>${wk}</b> / ${target} a settimana`;
       tog.setAttribute("aria-pressed", String(!!r.g));
-      tog.textContent = r.g ? "✓ Allenato" : "Segna allenamento";
-      dots.innerHTML = Array.from({ length: g.gym }, (_, i) => `<i class="${i < wk ? "on" : ""}"></i>`).join("");
+      tog.textContent = r.g ? "✓ Allenato" : g.gym ? "Segna allenamento" : "Segna allenamento extra";
+      dots.innerHTML = Array.from({ length: Math.max(target, wk) }, (_, i) => `<i class="${i < wk ? "on" : ""}"></i>`).join("");
       vP.className = "row-v" + (p >= g.pages ? " done" : "");
-      vP.innerHTML = `<b>${p}</b> / ${g.pages} pag.`;
+      vP.innerHTML = g.pages > 0 ? `<b>${p}</b> / ${g.pages} pag.` : `<b>${p}</b> pag. · libero`;
       if (document.activeElement !== inP) inP.value = p;
-      barPi.style.width = Math.min(100, p / g.pages * 100) + "%";
+      barPi.style.width = pct(p, g.pages) + "%";
       barP.classList.toggle("done", p >= g.pages);
       status.className = "status" + (ev.done ? " ok" : "");
       status.textContent = ev.jolly ? "Giorno jolly. La catena è salva."
@@ -573,9 +620,10 @@ button { cursor: pointer; }
       const lastMon = addDays(t, -7);
       if (addDays(lastMon, 6) >= state.start) {
         const n = gymCount(lastMon);
-        if (n < state.goals.gym) {
+        const target = weekGymTarget(lastMon);
+        if (n < target) {
           const b = el("div", "banner bad");
-          b.append(el("h2", null, `Settimana scorsa: ${n} allenamenti su ${state.goals.gym}`));
+          b.append(el("h2", null, `Settimana scorsa: ${n} allenamenti su ${target}`));
           b.append(el("p", null, "Questa settimana recuperali."));
           box.append(b);
         }
@@ -617,22 +665,22 @@ button { cursor: pointer; }
   }
 
   function renderStats() {
-    const t = todayKey(), g = state.goals, mon = mondayOf(t);
+    const t = todayKey(), mon = mondayOf(t);
     let debt = 0;
-    for (let k = mon; k < t; k = addDays(k, 1)) if (k >= state.start) debt += Math.max(0, g.study - (rec(k).s || 0));
-    const todayLeft = Math.max(0, g.study - (rec(t).s || 0));
+    for (let k = mon; k < t; k = addDays(k, 1)) if (k >= state.start && !rec(k).j) debt += Math.max(0, dayGoal(k).study - (rec(k).s || 0));
+    const todayLeft = rec(t).j ? 0 : Math.max(0, dayGoal(t).study - (rec(t).s || 0));
     const d = document.getElementById("debt");
     d.textContent = fmtH(debt) + " h";
     d.className = "stat-v" + (debt > 0 ? " bad" : " ok");
     document.getElementById("debt-s").textContent = debt > 0
       ? `non fatte da lunedì${todayLeft > 0 ? `, più ${fmtH(todayLeft)} h oggi` : ""}`
       : (todayLeft > 0 ? `in pari. Oggi ne mancano ${fmtH(todayLeft)}` : "in pari questa settimana");
-    const n = gymCount(mon), left = 7 - dow(t);
+    const n = gymCount(mon), left = 7 - dow(t), target = weekGymTarget(mon);
     const gy = document.getElementById("gym");
-    gy.textContent = `${n}/${g.gym}`;
-    const need = Math.max(0, g.gym - n);
-    gy.className = "stat-v" + (n >= g.gym ? " ok" : need > left ? " bad" : "");
-    document.getElementById("gym-s").textContent = n >= g.gym ? "obiettivo raggiunto"
+    gy.textContent = `${n}/${target}`;
+    const need = Math.max(0, target - n);
+    gy.className = "stat-v" + (n >= target ? " ok" : need > left ? " bad" : "");
+    document.getElementById("gym-s").textContent = n >= target ? "obiettivo raggiunto"
       : need > left ? "non ci arrivi più questa settimana" : `${need} da fare in ${left} ${left === 1 ? "giorno" : "giorni"}`;
   }
 
@@ -655,10 +703,65 @@ button { cursor: pointer; }
     }
   }
 
-  function renderGoals() {
-    const map = { "g-study": "study", "g-pages": "pages", "g-gym": "gym", "g-jolly": "jolly" };
-    for (const id in map) { const i = document.getElementById(id); if (document.activeElement !== i) i.value = state.goals[map[id]]; }
+  // ---- settimana tipo ----
+  const DAYS_SHORT = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+  const FIELDS = { lesson: [0, 14, v => Math.round(v * 2) / 2], study: [0, 16, v => Math.round(v * 2) / 2], pages: [0, 500, Math.round] };
+  const weekInputs = [];
+  function editablePlan() {
+    const t = todayKey(), last = state.plans[state.plans.length - 1];
+    if (last.from === t) { delete last.gymWeekly; return last; }
+    const p = { from: t, days: JSON.parse(JSON.stringify(planFor(t).days)) };
+    state.plans.push(p);
+    return p;
   }
+  function planChanged() { save(); todayBuiltFor = null; refresh(); }
+  function buildWeek() {
+    const tb = document.getElementById("week");
+    for (let i = 0; i < 7; i++) {
+      const tr = el("tr"), cells = {};
+      tr.append(el("td", null, DAYS_SHORT[i]));
+      ["lesson", "study", "gym", "pages"].forEach(f => {
+        const td = el("td");
+        if (f === "gym") {
+          const b = el("button"); b.id = `w-${i}-gym`;
+          b.setAttribute("aria-label", `Palestra ${DAYS_IT[i]}`);
+          b.onclick = () => { const d = editablePlan().days[i]; d.gym = !d.gym; planChanged(); };
+          cells.gym = b; td.append(b);
+        } else {
+          const inp = el("input"); inp.id = `w-${i}-${f}`;
+          Object.assign(inp, { type: "number", min: "0", step: f === "pages" ? "1" : "0.5" });
+          inp.setAttribute("inputmode", f === "pages" ? "numeric" : "decimal");
+          inp.setAttribute("aria-label", `${{ lesson: "Ore di lezione", study: "Ore di studio", pages: "Pagine" }[f]} ${DAYS_IT[i]}`);
+          inp.onchange = () => {
+            const v = parseFloat(String(inp.value).replace(",", "."));
+            if (!isNaN(v)) { const [min, max, norm] = FIELDS[f]; editablePlan().days[i][f] = Math.max(min, Math.min(max, norm(v))); }
+            planChanged();
+          };
+          cells[f] = inp; td.append(inp);
+        }
+        tr.append(td);
+      });
+      tb.append(tr);
+      weekInputs.push({ tr, cells });
+    }
+  }
+  function renderGoals() {
+    const t = todayKey(), days = planFor(t).days;
+    let tl = 0, ts = 0, tg = 0, tp = 0;
+    weekInputs.forEach(({ tr, cells }, i) => {
+      const d = days[i];
+      tr.classList.toggle("is-today", dow(t) === i);
+      for (const f of ["lesson", "study", "pages"]) if (document.activeElement !== cells[f]) cells[f].value = d[f];
+      cells.gym.setAttribute("aria-pressed", String(!!d.gym));
+      cells.gym.textContent = d.gym ? "Sì" : "—";
+      tl += d.lesson; ts += d.study; tg += d.gym ? 1 : 0; tp += d.pages;
+    });
+    document.getElementById("week-total").innerHTML =
+      `Totale: <b>${fmtH(tl)} h</b> lezione · <b>${fmtH(ts)} h</b> studio · <b>${tg}</b> palestra · <b>${tp}</b> pagine`;
+    const j = document.getElementById("g-jolly");
+    if (document.activeElement !== j) j.value = state.goals.jolly;
+  }
+  buildWeek();
 
   function refresh() {
     const t = todayKey();
@@ -669,15 +772,11 @@ button { cursor: pointer; }
     renderBanners(); renderChain(); renderStats(); renderGrid(); renderGoals();
   }
 
-  // ---- goals ----
-  [["g-study", "study", 0.5, 16, v => Math.round(v * 2) / 2], ["g-pages", "pages", 1, 500, Math.round], ["g-gym", "gym", 1, 7, Math.round], ["g-jolly", "jolly", 0, 5, Math.round]]
-    .forEach(([id, key, min, max, norm]) => {
-      document.getElementById(id).addEventListener("change", e => {
-        const v = parseFloat(String(e.target.value).replace(",", "."));
-        if (!isNaN(v)) { state.goals[key] = Math.max(min, Math.min(max, norm(v))); save(); }
-        refresh();
-      });
-    });
+  document.getElementById("g-jolly").addEventListener("change", e => {
+    const v = parseInt(e.target.value, 10);
+    if (!isNaN(v)) { state.goals.jolly = Math.max(0, Math.min(5, v)); save(); }
+    refresh();
+  });
 
   // ---- sheet ----
   const sheet = document.getElementById("sheet"), back = document.getElementById("sheet-back");

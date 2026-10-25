@@ -1,5 +1,5 @@
 // Cache per usare l'app anche offline. Cambia VERSION a ogni aggiornamento.
-const VERSION = "la-catena-v2";
+const VERSION = "la-catena-v3";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
