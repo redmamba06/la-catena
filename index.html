@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#EDEFF3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1014" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="La Catena">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>La Catena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: una colonna stretta da telefono. Catena in alto, oggi al centro, storico e obiettivi sotto. */
+:root {
+  --bg: #EDEFF3;
+  --surface: #FFFFFF;
+  --ink: #14161B;
+  --muted: #5E6573;
+  --line: #D7DBE2;
+  --accent: #2A44E8;
+  --accent-ink: #FFFFFF;
+  --ok: #1E9455;
+  --ok-soft: #C8E8D5;
+  --bad: #D73434;
+  --bad-soft: #F3C4C4;
+  --bad-bg: #FCEAEA;
+  --warn: #B86E00;
+  --warn-bg: #FFF2DA;
+  --empty: #E0E3E9;
+  --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1014; --surface: #181B21; --ink: #ECEEF2; --muted: #9AA1AE; --line: #2A2F38;
+    --accent: #8090FF; --accent-ink: #0E1014; --ok: #3CC47A; --ok-soft: #1D4632;
+    --bad: #FF5D5D; --bad-soft: #5A2427; --bad-bg: #351416; --warn: #F0A93B; --warn-bg: #33260E;
+    --empty: #232731; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1014; --surface: #181B21; --ink: #ECEEF2; --muted: #9AA1AE; --line: #2A2F38;
+  --accent: #8090FF; --accent-ink: #0E1014; --ok: #3CC47A; --ok-soft: #1D4632;
+  --bad: #FF5D5D; --bad-soft: #5A2427; --bad-bg: #351416; --warn: #F0A93B; --warn-bg: #33260E;
+  --empty: #232731; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; min-height: 100vh; }
+[hidden] { display: none !important; }
+.backup { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.backup button, .backup label { height: 46px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--bg); font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.backup input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+}
+.wrap {
+  max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px;
+  padding-block: 18px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.brand { font-family: var(--f-display); font-weight: 800; font-size: 26px; letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+.date { color: var(--muted); font-size: 14px; text-transform: capitalize; }
+
+.banner { border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.banner h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.banner p { margin: 0; font-size: 14px; }
+.banner ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.banner.bad { background: var(--bad-bg); color: var(--ink); border: 1.5px solid var(--bad); }
+.banner.bad h2 { color: var(--bad); }
+.banner.warn { background: var(--warn-bg); border: 1.5px solid var(--warn); }
+.banner.warn h2 { color: var(--warn); }
+
+.chain { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; gap: 2px; }
+.chain-num {
+  font-family: var(--f-display); font-weight: 800; font-size: 132px; line-height: .9;
+  font-variant-numeric: tabular-nums; color: var(--ink); transition: color .3s;
+}
+.chain.broken .chain-num { color: var(--bad); }
+.chain-label { font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
+.chain-best { font-size: 13px; color: var(--muted); font-family: var(--f-mono); }
+.links { display: flex; align-items: center; margin-top: 12px; max-width: 100%; }
+.link { width: 20px; height: 13px; border-radius: 7px; border: 3px solid var(--empty); flex: none; }
+.link + .link { margin-left: -5px; }
+.link.ok { border-color: var(--ok); }
+.link.bad { border-color: var(--bad); transform: rotate(-18deg); }
+.link.today { border-style: dashed; border-color: var(--muted); }
+.link.today.ok { border-style: solid; border-color: var(--ok); }
+
+.card { background: var(--surface); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.card-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.card-h h2 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 22px; text-transform: uppercase; letter-spacing: .03em; }
+.pill { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.open { background: var(--empty); color: var(--muted); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+
+.row { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; padding-top: 0; }
+.row-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.row-t { font-weight: 600; }
+.row-v { font-family: var(--f-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.row-v b { color: var(--ink); }
+.row-v.done b { color: var(--ok); }
+
+.stepper { display: flex; gap: 8px; align-items: stretch; }
+.stepper button {
+  width: 48px; height: 48px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--bg);
+  font-size: 22px; font-weight: 600; display: grid; place-items: center; flex: none;
+}
+.stepper button.quick { width: auto; padding: 0 12px; font-size: 14px; font-family: var(--f-mono); }
+.stepper button:active { transform: scale(.95); }
+.stepper input {
+  flex: 1; min-width: 0; height: 48px; text-align: center; border-radius: 12px; border: 1.5px solid var(--line);
+  background: var(--surface); font-family: var(--f-mono); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums;
+}
+.bar { height: 6px; background: var(--empty); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width .25s; }
+.bar.done > i { background: var(--ok); }
+
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.seg button {
+  height: 44px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--bg); font-weight: 600; font-size: 15px;
+}
+.seg button[aria-pressed="true"].yes { background: var(--ok); border-color: var(--ok); color: var(--accent-ink); }
+.seg button[aria-pressed="true"].no { background: var(--bad); border-color: var(--bad); color: var(--accent-ink); }
+.seg button[aria-pressed="true"].na { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.note { font-size: 14px; color: var(--muted); margin: 0; }
+
+.toggle {
+  height: 48px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--bg); font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.toggle[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: var(--accent-ink); }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--empty); }
+.dots i.on { background: var(--ok); }
+
+.status { font-size: 14px; color: var(--muted); margin: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.status.ok { color: var(--ok); font-weight: 600; }
+
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--surface); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat-k { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+.stat-v { font-family: var(--f-display); font-weight: 800; font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat-v.bad { color: var(--bad); }
+.stat-v.ok { color: var(--ok); }
+.stat-s { font-size: 13px; color: var(--muted); }
+
+.grid-wrap { display: grid; grid-template-columns: auto 1fr; gap: 6px; }
+.grid-days { display: grid; grid-template-rows: repeat(7, 1fr); gap: 3px; font-family: var(--f-mono); font-size: 10px; color: var(--muted); }
+.grid-days span { display: flex; align-items: center; }
+.grid { display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(7, auto); grid-auto-flow: column; gap: 3px; }
+.cell { aspect-ratio: 1; border-radius: 4px; background: var(--empty); border: 0; padding: 0; max-width: 100%; }
+.cell.done { background: var(--ok); }
+.cell.fail { background: var(--bad); }
+.cell.partial { background: var(--bad-soft); }
+.cell.pre { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.cell.future { background: transparent; cursor: default; }
+.cell.today { box-shadow: inset 0 0 0 2px var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+.goals { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.goal { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.goal label { font-size: 15px; }
+.goal input {
+  width: 88px; height: 42px; text-align: center; border-radius: 10px; border: 1.5px solid var(--line);
+  background: var(--bg); font-family: var(--f-mono); font-weight: 700; font-size: 16px;
+}
+.foot { text-align: center; font-size: 12px; color: var(--muted); }
+
+.sheet-back { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 20; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 88%; overflow-y: auto;
+  background: var(--surface); border-radius: 22px 22px 0 0;
+  padding-top: 18px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.sheet-in { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.sheet .card { padding: 0; }
+.btn-main { height: 50px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 16px; }
+
+.timer {
+  height: 48px; border-radius: 12px; border: 1.5px dashed var(--accent); background: transparent; color: var(--accent);
+  font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.timer.on { background: var(--accent); color: var(--accent-ink); border-style: solid; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.jolly-btn { height: 44px; border-radius: 12px; border: 1.5px solid var(--accent); background: transparent; color: var(--accent); font-weight: 600; }
+.jolly-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.jolly-btn:disabled { opacity: .45; cursor: default; }
+.pill.jolly { background: var(--accent); color: var(--accent-ink); }
+.cell.jolly { background: var(--accent); }
+.link.jolly, .link.today.jolly { border-color: var(--accent); border-style: solid; }
+.banner button {
+  align-self: flex-start; margin-top: 4px; height: 40px; padding: 0 14px; border-radius: 10px; border: 0;
+  background: var(--accent); color: var(--accent-ink); font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">La Catena</h1>
+    <span class="date" id="today-date"></span>
+  </header>
+
+  <div id="banners" style="display:flex;flex-direction:column;gap:10px"></div>
+
+  <section class="chain" id="chain" aria-live="polite">
+    <div class="chain-num" id="chain-num">0</div>
+    <div class="chain-label" id="chain-label">giorni di fila</div>
+    <div class="chain-best" id="chain-best"></div>
+    <div class="links" id="links" aria-hidden="true"></div>
+  </section>
+
+  <section class="card" id="today-card"></section>
+
+  <section class="stats">
+    <div class="stat">
+      <span class="stat-k">Debito di studio</span>
+      <span class="stat-v" id="debt">0 h</span>
+      <span class="stat-s" id="debt-s">questa settimana</span>
+    </div>
+    <div class="stat">
+      <span class="stat-k">Palestra</span>
+      <span class="stat-v" id="gym">0/4</span>
+      <span class="stat-s" id="gym-s">questa settimana</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Ultime 15 settimane</h2></div>
+    <div class="grid-wrap">
+      <div class="grid-days"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
+      <div class="grid" id="grid"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>Completa</span>
+      <span><i style="background:var(--bad-soft)"></i>A metà</span>
+      <span><i style="background:var(--bad)"></i>Saltata</span>
+      <span><i style="background:var(--accent)"></i>Jolly</span>
+    </div>
+    <p class="note">Tocca un giorno per correggerlo.</p>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Obiettivi</h2></div>
+    <div class="goals">
+      <div class="goal"><label for="g-study">Ore di studio al giorno</label><input id="g-study" type="number" inputmode="decimal" min="0.5" max="16" step="0.5"></div>
+      <div class="goal"><label for="g-pages">Pagine da leggere al giorno</label><input id="g-pages" type="number" inputmode="numeric" min="1" max="200" step="1"></div>
+      <div class="goal"><label for="g-gym">Allenamenti a settimana</label><input id="g-gym" type="number" inputmode="numeric" min="1" max="7" step="1"></div>
+      <div class="goal"><label for="g-jolly">Giorni jolly al mese</label><input id="g-jolly" type="number" inputmode="numeric" min="0" max="5" step="1"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Backup</h2></div>
+    <p class="note">I dati restano su questo telefono. Esporta un backup ogni tanto, e prima di cambiare telefono.</p>
+    <div class="backup">
+      <button id="export">Esporta backup</button>
+      <label for="import">Importa backup</label>
+      <input id="import" type="file" accept="application/json,.json">
+    </div>
+    <p class="note" id="backup-msg" hidden></p>
+  </section>
+
+  <p class="foot" id="sync">Caricamento…</p>
+</div>
+
+<div class="sheet-back" id="sheet-back" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+  <div class="sheet-in">
+    <div class="card" id="sheet-card"></div>
+    <button class="btn-main" id="sheet-close">Fatto</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const LS_KEY = "la-catena-v1";
+  const DAYS_IT = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"];
+  const MONTHS_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+
+  // ---- date helpers (local time, keys YYYY-MM-DD) ----
+  const pad = n => String(n).padStart(2, "0");
+  const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parse = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+  const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return keyOf(d); };
+  const dow = k => (parse(k).getDay() + 6) % 7; // 0 = lunedì
+  const mondayOf = k => addDays(k, -dow(k));
+  const todayKey = () => keyOf(new Date());
+  const longDate = k => { const d = parse(k); return `${DAYS_IT[dow(k)]} ${d.getDate()} ${MONTHS_IT[d.getMonth()]}`; };
+  const fmtH = x => String(Math.round(x * 10) / 10).replace(".", ",");
+
+  // ---- state ----
+  const fresh = () => ({ goals: { study: 3, pages: 10, gym: 4, jolly: 1 }, start: todayKey(), days: {}, timer: null });
+  const hydrate = obj => { const s = Object.assign(fresh(), obj); s.goals = Object.assign(fresh().goals, obj.goals); return s; };
+  let state = fresh();
+  try { const raw = localStorage.getItem(LS_KEY); if (raw) state = hydrate(JSON.parse(raw)); } catch (e) {}
+
+  const rec = k => state.days[k] || {};
+  function setDay(k, patch) {
+    const next = Object.assign({}, rec(k), patch);
+    state.days[k] = next;
+    if (k < state.start) state.start = k;
+    save();
+    refresh();
+  }
+
+  function evalDay(k) {
+    const r = rec(k), g = state.goals, missing = [];
+    if (r.j) return { done: true, jolly: true, missing, touched: true };
+    const s = r.s || 0, p = r.p || 0;
+    if (s < g.study) missing.push(`studio: mancano ${fmtH(g.study - s)} h`);
+    if (dow(k) < 5 && r.l !== "si" && r.l !== "na") missing.push(r.l === "no" ? "lezione saltata" : "lezione non segnata");
+    if (p < g.pages) missing.push(`lettura: mancano ${g.pages - p} pagine`);
+    return { done: missing.length === 0, missing, touched: !!state.days[k] && (s > 0 || p > 0 || !!r.l || !!r.g) };
+  }
+  function streakEnding(k) {
+    let n = 0;
+    while (k >= state.start && evalDay(k).done) { n++; k = addDays(k, -1); }
+    return n;
+  }
+  function bestStreak() {
+    let best = 0, run = 0, k = state.start; const t = todayKey();
+    while (k <= t) { if (evalDay(k).done) { run++; best = Math.max(best, run); } else if (k !== t) run = 0; k = addDays(k, 1); }
+    return best;
+  }
+  const gymCount = mon => { let n = 0; for (let i = 0; i < 7; i++) if (rec(addDays(mon, i)).g) n++; return n; };
+  const jollyLeft = k => {
+    const m = k.slice(0, 7);
+    const used = Object.keys(state.days).filter(d => d.startsWith(m) && state.days[d].j).length;
+    return Math.max(0, state.goals.jolly - used);
+  };
+
+  // ---- timer di studio: l'inizio è salvato, quindi sopravvive a chiusure e ricariche ----
+  const TIMER_MAX = 8 * 3600000;
+  const timerElapsed = () => state.timer ? Math.min(Date.now() - state.timer.start, TIMER_MAX) : 0;
+  const fmtClock = ms => { const t = Math.floor(ms / 1000); return `${Math.floor(t / 3600)}:${pad(Math.floor(t / 60) % 60)}:${pad(t % 60)}`; };
+  function toggleTimer() {
+    if (state.timer) {
+      const t = state.timer, add = Math.round(timerElapsed() / 36000) / 100;
+      state.timer = null;
+      setDay(t.day, { s: Math.min(24, Math.round(((rec(t.day).s || 0) + add) * 100) / 100) });
+    } else {
+      state.timer = { start: Date.now(), day: todayKey() };
+      save(); refresh();
+    }
+  }
+
+  // ---- persistence: localStorage subito, db del tuo account con debounce ----
+  let db = null, docRef = null, saveTimer = null, writing = false, dirty = false;
+  function save() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+    if (!docRef) return;
+    dirty = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 700);
+  }
+  async function flush() {
+    if (!docRef || writing) return;
+    writing = true; dirty = false;
+    try { await docRef.set(JSON.parse(JSON.stringify(state))); setSync("Salvato sul tuo account"); }
+    catch (e) { setSync(e && e.code === "invalid_argument" ? "Non puoi salvare qui: solo in questo browser" : "Salvataggio non riuscito, riprovo"); if (e && e.code !== "invalid_argument") dirty = true; }
+    writing = false;
+    if (dirty) { clearTimeout(saveTimer); saveTimer = setTimeout(flush, 1500); }
+  }
+  const setSync = t => { document.getElementById("sync").textContent = t; };
+
+  async function connect() {
+    let user = null;
+    try { [db, user] = await Promise.all([claude.use("db"), claude.use("user")]); } catch (e) {}
+    const uid = user ? await user.id() : null;
+    if (!db || !uid) { setSync("Salvato solo in questo browser"); return; }
+    docRef = db.doc(`data/users/${uid}/tracker`);
+    let first = true;
+    docRef.onSnapshot(snap => {
+      if (first) {
+        first = false;
+        if (!snap.exists) { save(); return; } // porta sull'account i dati già nel browser
+      }
+      if (!snap.exists || dirty || writing || snap.metadata.hasPendingWrites) return;
+      const remote = snap.data();
+      if (JSON.stringify(remote) === JSON.stringify(state)) return;
+      state = hydrate(JSON.parse(JSON.stringify(remote)));
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+      setSync("Sincronizzato con il tuo account");
+      refresh();
+    }, () => setSync("Salvato solo in questo browser"));
+    setSync("Sincronizzato con il tuo account");
+  }
+
+  // ---- day form (riusato per oggi e per correggere un giorno passato) ----
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+  const forms = new Set();
+
+  function buildForm(container, k, isToday) {
+    container.innerHTML = "";
+    const head = el("div", "card-h");
+    const h = el("h2"); h.id = isToday ? "today-title" : "sheet-title";
+    h.textContent = isToday ? "Oggi" : longDate(k);
+    const pill = el("span", "pill");
+    head.append(h, pill);
+    container.append(head);
+
+    // Studio
+    const rS = el("div", "row");
+    const vS = el("span", "row-v");
+    const hS = el("div", "row-h"); hS.append(el("span", "row-t", "Studio"), vS);
+    const stS = el("div", "stepper");
+    const minusS = el("button", null, "−"); minusS.setAttribute("aria-label", "Meno mezz'ora");
+    const inS = el("input"); Object.assign(inS, { type: "number", inputmode: "decimal", step: "0.5", min: "0", id: `s-${k}-${isToday ? "t" : "e"}` });
+    inS.setAttribute("aria-label", "Ore di studio");
+    const plusS = el("button", null, "+"); plusS.setAttribute("aria-label", "Più mezz'ora");
+    stS.append(minusS, inS, plusS);
+    const barS = el("div", "bar"); const barSi = el("i"); barS.append(barSi);
+    rS.append(hS, stS, barS);
+    let timerBtn = null;
+    if (isToday) { timerBtn = el("button", "timer"); timerBtn.onclick = toggleTimer; rS.append(timerBtn); }
+    const setS = v => setDay(k, { s: Math.max(0, Math.min(24, Math.round(v * 2) / 2)) });
+    minusS.onclick = () => setS((rec(k).s || 0) - 0.5);
+    plusS.onclick = () => setS((rec(k).s || 0) + 0.5);
+    inS.oninput = () => { const v = parseFloat(inS.value.replace(",", ".")); if (!isNaN(v)) setDay(k, { s: Math.max(0, Math.min(24, v)) }); };
+
+    // Lezione
+    const rL = el("div", "row");
+    const hL = el("div", "row-h"); hL.append(el("span", "row-t", "Lezione"));
+    rL.append(hL);
+    let segBtns = [];
+    if (dow(k) < 5) {
+      const seg = el("div", "seg");
+      [["si", "yes", "Ci sono andato"], ["no", "no", "Saltata"], ["na", "na", "Non c'era"]].forEach(([val, cls, label]) => {
+        const b = el("button", cls, label); b.dataset.v = val;
+        b.onclick = () => setDay(k, { l: rec(k).l === val ? null : val });
+        seg.append(b); segBtns.push(b);
+      });
+      rL.append(seg);
+    } else {
+      rL.append(el("p", "note", "Weekend: le lezioni non contano."));
+    }
+
+    // Palestra
+    const rG = el("div", "row");
+    const vG = el("span", "row-v");
+    const hG = el("div", "row-h"); hG.append(el("span", "row-t", "Palestra"), vG);
+    const tog = el("button", "toggle");
+    tog.onclick = () => setDay(k, { g: !rec(k).g });
+    const dots = el("div", "dots");
+    rG.append(hG, tog, dots);
+
+    // Lettura
+    const rP = el("div", "row");
+    const vP = el("span", "row-v");
+    const hP = el("div", "row-h"); hP.append(el("span", "row-t", "Lettura serale"), vP);
+    const stP = el("div", "stepper");
+    const minusP = el("button", null, "−"); minusP.setAttribute("aria-label", "Una pagina in meno");
+    const inP = el("input"); Object.assign(inP, { type: "number", inputmode: "numeric", step: "1", min: "0", id: `p-${k}-${isToday ? "t" : "e"}` });
+    inP.setAttribute("aria-label", "Pagine lette");
+    const plusP = el("button", null, "+"); plusP.setAttribute("aria-label", "Una pagina in più");
+    const plus5 = el("button", "quick", "+5");
+    stP.append(minusP, inP, plusP, plus5);
+    const barP = el("div", "bar"); const barPi = el("i"); barP.append(barPi);
+    rP.append(hP, stP, barP);
+    const setP = v => setDay(k, { p: Math.max(0, Math.min(2000, Math.round(v))) });
+    minusP.onclick = () => setP((rec(k).p || 0) - 1);
+    plusP.onclick = () => setP((rec(k).p || 0) + 1);
+    plus5.onclick = () => setP((rec(k).p || 0) + 5);
+    inP.oninput = () => { const v = parseInt(inP.value, 10); if (!isNaN(v)) setDay(k, { p: Math.max(0, v) }); };
+
+    // Giorno jolly
+    const rJ = el("div", "row");
+    const vJ = el("span", "row-v");
+    const hJ = el("div", "row-h"); hJ.append(el("span", "row-t", "Giorno jolly"), vJ);
+    const jBtn = el("button", "jolly-btn");
+    jBtn.onclick = () => { const r = rec(k); if (r.j) setDay(k, { j: false }); else if (jollyLeft(k) > 0) setDay(k, { j: true }); };
+    const jNote = el("p", "note");
+    rJ.append(hJ, jBtn, jNote);
+
+    const status = el("p", "status");
+    container.append(rS, rL, rG, rP, rJ, status);
+
+    function sync() {
+      const r = rec(k), g = state.goals, ev = evalDay(k);
+      const running = state.timer && state.timer.day === k;
+      const s = (r.s || 0) + (running ? timerElapsed() / 3600000 : 0), p = r.p || 0;
+      const isT = k === todayKey();
+      pill.className = "pill " + (ev.jolly ? "jolly" : ev.done ? "ok" : isT ? "open" : "bad");
+      pill.textContent = ev.jolly ? "Jolly" : ev.done ? "Chiusa" : isT ? "Aperta" : "Non chiusa";
+      vS.className = "row-v" + (s >= g.study ? " done" : "");
+      vS.innerHTML = `<b>${fmtH(s)}</b> / ${fmtH(g.study)} h`;
+      if (document.activeElement !== inS) inS.value = r.s || 0;
+      barSi.style.width = Math.min(100, s / g.study * 100) + "%";
+      barS.classList.toggle("done", s >= g.study);
+      if (timerBtn) {
+        const other = state.timer && !running;
+        timerBtn.classList.toggle("on", !!state.timer);
+        timerBtn.textContent = state.timer ? `■ Ferma · ${fmtClock(timerElapsed())}` : "▶ Avvia timer di studio";
+        timerBtn.setAttribute("aria-label", state.timer ? "Ferma il timer e aggiungi il tempo allo studio" : "Avvia il timer di studio");
+        if (other) timerBtn.textContent += " (da ieri)";
+      }
+      const left = jollyLeft(k), month = MONTHS_IT[parse(k).getMonth()];
+      vJ.innerHTML = `<b>${left}</b> / ${g.jolly} a ${month}`;
+      jBtn.setAttribute("aria-pressed", String(!!r.j));
+      jBtn.textContent = r.j ? "Annulla il jolly" : "Usa il jolly";
+      jBtn.disabled = !r.j && (left <= 0 || ev.done);
+      jNote.textContent = r.j ? "Questo giorno non rompe la catena."
+        : ev.done ? "Giornata già chiusa: il jolly non serve."
+        : left <= 0 ? `Hai già usato i jolly di ${month}.`
+        : "Per malattia o esami: salva la catena anche se non fai niente.";
+      segBtns.forEach(b => b.setAttribute("aria-pressed", String(r.l === b.dataset.v)));
+      const wk = gymCount(mondayOf(k));
+      vG.className = "row-v" + (wk >= g.gym ? " done" : "");
+      vG.innerHTML = `<b>${wk}</b> / ${g.gym} a settimana`;
+      tog.setAttribute("aria-pressed", String(!!r.g));
+      tog.textContent = r.g ? "✓ Allenato" : "Segna allenamento";
+      dots.innerHTML = Array.from({ length: g.gym }, (_, i) => `<i class="${i < wk ? "on" : ""}"></i>`).join("");
+      vP.className = "row-v" + (p >= g.pages ? " done" : "");
+      vP.innerHTML = `<b>${p}</b> / ${g.pages} pag.`;
+      if (document.activeElement !== inP) inP.value = p;
+      barPi.style.width = Math.min(100, p / g.pages * 100) + "%";
+      barP.classList.toggle("done", p >= g.pages);
+      status.className = "status" + (ev.done ? " ok" : "");
+      status.textContent = ev.jolly ? "Giorno jolly. La catena è salva."
+        : ev.done ? "Giornata chiusa. La catena regge." : "Manca ancora: " + ev.missing.join(", ") + ".";
+    }
+    sync();
+    return sync;
+  }
+
+  // ---- render ----
+  let todaySync = null, todayBuiltFor = null, sheetSync = null;
+
+  function renderBanners() {
+    const box = document.getElementById("banners"); box.innerHTML = "";
+    const t = todayKey(), y = addDays(t, -1), evY = evalDay(y);
+    if (y >= state.start && !evY.done) {
+      const lost = streakEnding(addDays(y, -1));
+      const b = el("div", "banner bad");
+      b.append(el("h2", null, "Ieri non hai chiuso la giornata"));
+      const ul = el("ul"); evY.missing.forEach(m => ul.append(el("li", null, m))); b.append(ul);
+      b.append(el("p", null, lost > 0 ? `Hai buttato una catena di <b>${lost} ${lost === 1 ? "giorno" : "giorni"}</b>. Si riparte da zero.` : "La catena è a zero. Oggi puoi ricominciare."));
+      const left = jollyLeft(y);
+      if (left > 0 && lost > 0) {
+        const jb = el("button", null, `Ero malato o avevo un esame: usa il jolly (${left} rimast${left === 1 ? "o" : "i"})`);
+        jb.onclick = () => setDay(y, { j: true });
+        b.append(jb);
+      }
+      box.append(b);
+    }
+    if (dow(t) === 0) {
+      const lastMon = addDays(t, -7);
+      if (addDays(lastMon, 6) >= state.start) {
+        const n = gymCount(lastMon);
+        if (n < state.goals.gym) {
+          const b = el("div", "banner bad");
+          b.append(el("h2", null, `Settimana scorsa: ${n} allenamenti su ${state.goals.gym}`));
+          b.append(el("p", null, "Questa settimana recuperali."));
+          box.append(b);
+        }
+      }
+    }
+    const now = new Date(), evT = evalDay(t);
+    if (now.getHours() >= 20 && !evT.done) {
+      const b = el("div", "banner warn");
+      b.append(el("h2", null, `Sono le ${pad(now.getHours())}:${pad(now.getMinutes())} e la giornata è ancora aperta`));
+      const ul = el("ul"); evT.missing.forEach(m => ul.append(el("li", null, m))); b.append(ul);
+      const c = currentChain();
+      if (c > 0) b.append(el("p", null, `A mezzanotte rischi di perdere ${c} ${c === 1 ? "giorno" : "giorni"} di catena.`));
+      box.append(b);
+    }
+  }
+
+  function currentChain() {
+    const t = todayKey();
+    return evalDay(t).done ? streakEnding(t) : streakEnding(addDays(t, -1));
+  }
+
+  function renderChain() {
+    const t = todayKey(), y = addDays(t, -1);
+    const c = currentChain();
+    const broken = c === 0 && y >= state.start && !evalDay(y).done;
+    document.getElementById("chain").classList.toggle("broken", broken);
+    document.getElementById("chain-num").textContent = c;
+    document.getElementById("chain-label").textContent = c === 1 ? "giorno di fila" : "giorni di fila";
+    const best = bestStreak();
+    document.getElementById("chain-best").textContent = best > 0 ? `record: ${best}` : "chiudi tutto oggi per iniziare";
+    const links = document.getElementById("links"); links.innerHTML = "";
+    for (let i = 13; i >= 0; i--) {
+      const k = addDays(t, -i), l = el("i", "link");
+      const ev = evalDay(k);
+      if (i === 0) { l.classList.add("today"); if (ev.done) l.classList.add(ev.jolly ? "jolly" : "ok"); }
+      else if (k >= state.start) l.classList.add(ev.jolly ? "jolly" : ev.done ? "ok" : "bad");
+      links.append(l);
+    }
+  }
+
+  function renderStats() {
+    const t = todayKey(), g = state.goals, mon = mondayOf(t);
+    let debt = 0;
+    for (let k = mon; k < t; k = addDays(k, 1)) if (k >= state.start) debt += Math.max(0, g.study - (rec(k).s || 0));
+    const todayLeft = Math.max(0, g.study - (rec(t).s || 0));
+    const d = document.getElementById("debt");
+    d.textContent = fmtH(debt) + " h";
+    d.className = "stat-v" + (debt > 0 ? " bad" : " ok");
+    document.getElementById("debt-s").textContent = debt > 0
+      ? `non fatte da lunedì${todayLeft > 0 ? `, più ${fmtH(todayLeft)} h oggi` : ""}`
+      : (todayLeft > 0 ? `in pari. Oggi ne mancano ${fmtH(todayLeft)}` : "in pari questa settimana");
+    const n = gymCount(mon), left = 7 - dow(t);
+    const gy = document.getElementById("gym");
+    gy.textContent = `${n}/${g.gym}`;
+    const need = Math.max(0, g.gym - n);
+    gy.className = "stat-v" + (n >= g.gym ? " ok" : need > left ? " bad" : "");
+    document.getElementById("gym-s").textContent = n >= g.gym ? "obiettivo raggiunto"
+      : need > left ? "non ci arrivi più questa settimana" : `${need} da fare in ${left} ${left === 1 ? "giorno" : "giorni"}`;
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById("grid"); grid.innerHTML = "";
+    const t = todayKey(), first = addDays(mondayOf(t), -7 * 14);
+    for (let i = 0; i < 105; i++) {
+      const k = addDays(first, i);
+      const b = el("button", "cell");
+      b.setAttribute("aria-label", longDate(k));
+      if (k > t) { b.classList.add("future"); b.disabled = true; b.tabIndex = -1; }
+      else {
+        const ev = evalDay(k);
+        if (k === t) { b.classList.add("today"); if (ev.done) b.classList.add(ev.jolly ? "jolly" : "done"); }
+        else if (k < state.start && !ev.touched) b.classList.add("pre");
+        else b.classList.add(ev.jolly ? "jolly" : ev.done ? "done" : ev.touched ? "partial" : "fail");
+        b.onclick = () => openSheet(k);
+      }
+      grid.append(b);
+    }
+  }
+
+  function renderGoals() {
+    const map = { "g-study": "study", "g-pages": "pages", "g-gym": "gym", "g-jolly": "jolly" };
+    for (const id in map) { const i = document.getElementById(id); if (document.activeElement !== i) i.value = state.goals[map[id]]; }
+  }
+
+  function refresh() {
+    const t = todayKey();
+    document.getElementById("today-date").textContent = longDate(t);
+    if (todayBuiltFor !== t) { todaySync = buildForm(document.getElementById("today-card"), t, true); todayBuiltFor = t; }
+    else todaySync();
+    if (sheetSync) sheetSync();
+    renderBanners(); renderChain(); renderStats(); renderGrid(); renderGoals();
+  }
+
+  // ---- goals ----
+  [["g-study", "study", 0.5, 16, v => Math.round(v * 2) / 2], ["g-pages", "pages", 1, 500, Math.round], ["g-gym", "gym", 1, 7, Math.round], ["g-jolly", "jolly", 0, 5, Math.round]]
+    .forEach(([id, key, min, max, norm]) => {
+      document.getElementById(id).addEventListener("change", e => {
+        const v = parseFloat(String(e.target.value).replace(",", "."));
+        if (!isNaN(v)) { state.goals[key] = Math.max(min, Math.min(max, norm(v))); save(); }
+        refresh();
+      });
+    });
+
+  // ---- sheet ----
+  const sheet = document.getElementById("sheet"), back = document.getElementById("sheet-back");
+  let lastFocus = null;
+  function openSheet(k) {
+    if (k === todayKey()) { document.getElementById("today-card").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    lastFocus = document.activeElement;
+    sheetSync = buildForm(document.getElementById("sheet-card"), k, false);
+    sheet.hidden = false; back.hidden = false;
+    document.getElementById("sheet-close").focus();
+  }
+  function closeSheet() {
+    sheet.hidden = true; back.hidden = true; sheetSync = null;
+    if (lastFocus) lastFocus.focus();
+  }
+  document.getElementById("sheet-close").onclick = closeSheet;
+  back.onclick = closeSheet;
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheet.hidden) closeSheet(); });
+
+  refresh();
+  setInterval(refresh, 60000);
+  setInterval(() => {
+    if (!state.timer) return;
+    if (Date.now() - state.timer.start >= TIMER_MAX) toggleTimer(); // timer dimenticato: si ferma a 8 ore
+    else if (todaySync) todaySync();
+  }, 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  // ---- versione installabile: dati sul telefono, backup a mano ----
+  setSync("Salvato su questo telefono");
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+  const msg = t => { const m = document.getElementById("backup-msg"); m.textContent = t; m.hidden = false; };
+  document.getElementById("export").onclick = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `la-catena-backup-${todayKey()}.json`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    msg("Backup esportato. Salvalo in File o mandalo a te stesso.");
+  };
+  document.getElementById("import").onchange = async e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      if (!data || typeof data.days !== "object") throw new Error("formato");
+      state = hydrate(data); save(); todayBuiltFor = null; refresh();
+      msg(`Backup importato: ${Object.keys(state.days).length} giorni.`);
+    } catch (err) { msg("Questo file non è un backup di La Catena."); }
+  };
+})();
+</script>
+
+</body>
+</html>
