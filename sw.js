@@ -1,5 +1,5 @@
 // Cache per usare l'app anche offline, più le notifiche. Cambia VERSION a ogni aggiornamento.
-const VERSION = "la-catena-v5";
+const VERSION = "la-catena-v6";
 const STATE_CACHE = "la-catena-state"; // copia dello stato scritta dalla pagina, letta qui per comporre le notifiche
 const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
@@ -31,7 +31,7 @@ const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const parse = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
 const addDays = (k, n) => { const d = parse(k); d.setDate(d.getDate() + n); return keyOf(d); };
 const dow = k => (parse(k).getDay() + 6) % 7;
-const fmtH = x => String(Math.round(x * 10) / 10).replace(".", ",");
+const fmtH = x => String(Math.round(x * 100) / 100).replace(".", ",");
 
 function makeEval(st) {
   const rec = k => st.days[k] || {};

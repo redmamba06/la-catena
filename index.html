@@ -355,7 +355,16 @@ button { cursor: pointer; }
   const mondayOf = k => addDays(k, -dow(k));
   const todayKey = () => keyOf(new Date());
   const longDate = k => { const d = parse(k); return `${DAYS_IT[dow(k)]} ${d.getDate()} ${MONTHS_IT[d.getMonth()]}`; };
-  const fmtH = x => String(Math.round(x * 10) / 10).replace(".", ",");
+  const fmtH = x => String(Math.round(x * 100) / 100).replace(".", ",");
+  // ore scritte come "1,5", "1.5", "1:30", "1h30" o "1h" → 1.5 / 1; NaN se non si capisce
+  function parseHours(str) {
+    const s = String(str).trim().toLowerCase().replace(/\s+/g, "");
+    if (!s) return NaN;
+    const m = s.match(/^(\d{1,2})(?:[:h](\d{0,2}))?(?:m(?:in)?)?$/);
+    if (m && (s.includes(":") || s.includes("h"))) return Number(m[1]) + (m[2] ? Number(m[2]) / 60 : 0);
+    return /^\d*[.,]?\d+$|^\d+[.,]$/.test(s) ? parseFloat(s.replace(",", ".")) : NaN;
+  }
+  const quarter = v => Math.round(v * 4) / 4;
 
   // ---- state ----
   // Settimana tipo: per ogni giorno (0 = lunedì) ore di lezione, ore di studio, palestra in programma, pagine.
@@ -500,7 +509,8 @@ button { cursor: pointer; }
     const hS = el("div", "row-h"); hS.append(el("span", "row-t", "Studio"), vS);
     const stS = el("div", "stepper");
     const minusS = el("button", null, "−"); minusS.setAttribute("aria-label", "Meno mezz'ora");
-    const inS = el("input"); Object.assign(inS, { type: "number", inputmode: "decimal", step: "0.5", min: "0", id: `s-${k}-${isToday ? "t" : "e"}` });
+    const inS = el("input"); Object.assign(inS, { type: "text", id: `s-${k}-${isToday ? "t" : "e"}`, placeholder: "es. 1,5 o 1:30", autocomplete: "off" });
+    inS.setAttribute("inputmode", "decimal");
     inS.setAttribute("aria-label", "Ore di studio");
     const plusS = el("button", null, "+"); plusS.setAttribute("aria-label", "Più mezz'ora");
     stS.append(minusS, inS, plusS);
@@ -508,10 +518,11 @@ button { cursor: pointer; }
     rS.append(hS, stS, barS);
     let timerBtn = null;
     if (isToday) { timerBtn = el("button", "timer"); timerBtn.onclick = toggleTimer; rS.append(timerBtn); }
-    const setS = v => setDay(k, { s: Math.max(0, Math.min(24, Math.round(v * 2) / 2)) });
+    const setS = v => setDay(k, { s: Math.max(0, Math.min(24, quarter(v))) });
     minusS.onclick = () => setS((rec(k).s || 0) - 0.5);
     plusS.onclick = () => setS((rec(k).s || 0) + 0.5);
-    inS.oninput = () => { const v = parseFloat(inS.value.replace(",", ".")); if (!isNaN(v)) setDay(k, { s: Math.max(0, Math.min(24, v)) }); };
+    inS.oninput = () => { const v = parseHours(inS.value); if (!isNaN(v)) setDay(k, { s: Math.max(0, Math.min(24, Math.round(v * 100) / 100)) }); };
+    inS.onchange = () => { inS.value = fmtH(rec(k).s || 0); };
 
     // Lezione
     const rL = el("div", "row");
@@ -583,7 +594,7 @@ button { cursor: pointer; }
       pill.textContent = ev.jolly ? "Jolly" : ev.done ? "Chiusa" : isT ? "Aperta" : "Non chiusa";
       vS.className = "row-v" + (s >= g.study ? " done" : "");
       vS.innerHTML = g.study > 0 ? `<b>${fmtH(s)}</b> / ${fmtH(g.study)} h` : `<b>${fmtH(s)}</b> h · giorno libero`;
-      if (document.activeElement !== inS) inS.value = r.s || 0;
+      if (document.activeElement !== inS) inS.value = fmtH(r.s || 0);
       barSi.style.width = pct(s, g.study) + "%";
       barS.classList.toggle("done", s >= g.study);
       if (timerBtn) {
@@ -744,7 +755,7 @@ button { cursor: pointer; }
 
   // ---- settimana tipo ----
   const DAYS_SHORT = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-  const FIELDS = { lesson: [0, 14, v => Math.round(v * 2) / 2], study: [0, 16, v => Math.round(v * 2) / 2], pages: [0, 500, Math.round] };
+  const FIELDS = { lesson: [0, 14, quarter], study: [0, 16, quarter], pages: [0, 500, Math.round] };
   const weekInputs = [];
   function editablePlan() {
     const t = todayKey(), last = state.plans[state.plans.length - 1];
@@ -768,12 +779,14 @@ button { cursor: pointer; }
           cells.gym = b; td.append(b);
         } else {
           const inp = el("input"); inp.id = `w-${i}-${f}`;
-          Object.assign(inp, { type: "number", min: "0", step: f === "pages" ? "1" : "0.5" });
+          if (f === "pages") Object.assign(inp, { type: "number", min: "0", step: "1" });
+          else Object.assign(inp, { type: "text", autocomplete: "off" });
           inp.setAttribute("inputmode", f === "pages" ? "numeric" : "decimal");
           inp.setAttribute("aria-label", `${{ lesson: "Ore di lezione", study: "Ore di studio", pages: "Pagine" }[f]} ${DAYS_IT[i]}`);
           inp.onchange = () => {
-            const v = parseFloat(String(inp.value).replace(",", "."));
+            const v = f === "pages" ? parseFloat(inp.value) : parseHours(inp.value);
             if (!isNaN(v)) { const [min, max, norm] = FIELDS[f]; editablePlan().days[i][f] = Math.max(min, Math.min(max, norm(v))); }
+            inp.blur();
             planChanged();
           };
           cells[f] = inp; td.append(inp);
@@ -790,7 +803,7 @@ button { cursor: pointer; }
     weekInputs.forEach(({ tr, cells }, i) => {
       const d = days[i];
       tr.classList.toggle("is-today", dow(t) === i);
-      for (const f of ["lesson", "study", "pages"]) if (document.activeElement !== cells[f]) cells[f].value = d[f];
+      for (const f of ["lesson", "study", "pages"]) if (document.activeElement !== cells[f]) cells[f].value = f === "pages" ? d[f] : fmtH(d[f]);
       cells.gym.setAttribute("aria-pressed", String(!!d.gym));
       cells.gym.textContent = d.gym ? "Sì" : "—";
       tl += d.lesson; ts += d.study; tg += d.gym ? 1 : 0; tp += d.pages;
