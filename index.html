@@ -102,6 +102,9 @@ button { cursor: pointer; }
 .link.today { border-style: dashed; border-color: var(--muted); }
 .link.today.ok { border-style: solid; border-color: var(--ok); }
 
+.start-ctl { margin-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); text-align: center; }
+.start-ctl button { height: 40px; padding: 0 16px; border-radius: 99px; border: 1.5px solid var(--accent); background: transparent; color: var(--accent); font-weight: 600; font-size: 14px; }
+
 .card { background: var(--surface); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 .card-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .card-h h2 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 22px; text-transform: uppercase; letter-spacing: .03em; }
@@ -245,6 +248,10 @@ button { cursor: pointer; }
     <div class="chain-label" id="chain-label">giorni di fila</div>
     <div class="chain-best" id="chain-best"></div>
     <div class="links" id="links" aria-hidden="true"></div>
+    <div class="start-ctl" id="start-ctl" hidden>
+      <span id="start-txt"></span>
+      <button id="start-btn"></button>
+    </div>
   </section>
 
   <section class="card" id="today-card"></section>
@@ -357,7 +364,7 @@ button { cursor: pointer; }
   function setDay(k, patch) {
     const next = Object.assign({}, rec(k), patch);
     state.days[k] = next;
-    if (k < state.start) state.start = k;
+    if (k < state.start && k < todayKey()) state.start = k; // correggere un giorno passato lo fa entrare nel conto
     save();
     refresh();
   }
@@ -591,6 +598,7 @@ button { cursor: pointer; }
       status.className = "status" + (ev.done ? " ok" : "");
       status.textContent = ev.jolly ? "Giorno jolly. La catena è salva."
         : ev.done ? "Giornata chiusa. La catena regge." : "Manca ancora: " + ev.missing.join(", ") + ".";
+      if (isT && k < state.start) status.textContent = "Giorno di prova: la catena parte domani.";
     }
     sync();
     return sync;
@@ -630,7 +638,7 @@ button { cursor: pointer; }
       }
     }
     const now = new Date(), evT = evalDay(t);
-    if (now.getHours() >= 20 && !evT.done) {
+    if (now.getHours() >= 20 && !evT.done && t >= state.start) {
       const b = el("div", "banner warn");
       b.append(el("h2", null, `Sono le ${pad(now.getHours())}:${pad(now.getMinutes())} e la giornata è ancora aperta`));
       const ul = el("ul"); evT.missing.forEach(m => ul.append(el("li", null, m))); b.append(ul);
@@ -653,7 +661,18 @@ button { cursor: pointer; }
     document.getElementById("chain-num").textContent = c;
     document.getElementById("chain-label").textContent = c === 1 ? "giorno di fila" : "giorni di fila";
     const best = bestStreak();
-    document.getElementById("chain-best").textContent = best > 0 ? `record: ${best}` : "chiudi tutto oggi per iniziare";
+    document.getElementById("chain-best").textContent = best > 0 ? `record: ${best}` : state.start > t ? "si parte domani" : "chiudi tutto oggi per iniziare";
+    const ctl = document.getElementById("start-ctl"), btn = document.getElementById("start-btn");
+    ctl.hidden = !(state.start > t || state.start === t);
+    if (state.start > t) {
+      document.getElementById("start-txt").textContent = "Oggi è di prova: non conta per la catena.";
+      btn.textContent = "Parto da oggi";
+      btn.onclick = () => { state.start = t; save(); refresh(); };
+    } else if (state.start === t) {
+      document.getElementById("start-txt").textContent = "Hai iniziato oggi?";
+      btn.textContent = "Oggi non conta, parto da domani";
+      btn.onclick = () => { state.start = addDays(t, 1); save(); refresh(); };
+    }
     const links = document.getElementById("links"); links.innerHTML = "";
     for (let i = 13; i >= 0; i--) {
       const k = addDays(t, -i), l = el("i", "link");
@@ -694,7 +713,7 @@ button { cursor: pointer; }
       if (k > t) { b.classList.add("future"); b.disabled = true; b.tabIndex = -1; }
       else {
         const ev = evalDay(k);
-        if (k === t) { b.classList.add("today"); if (ev.done) b.classList.add(ev.jolly ? "jolly" : "done"); }
+        if (k === t) { b.classList.add("today"); if (ev.done) b.classList.add(ev.jolly ? "jolly" : "done"); else if (k < state.start) b.classList.add("pre"); }
         else if (k < state.start && !ev.touched) b.classList.add("pre");
         else b.classList.add(ev.jolly ? "jolly" : ev.done ? "done" : ev.touched ? "partial" : "fail");
         b.onclick = () => openSheet(k);
