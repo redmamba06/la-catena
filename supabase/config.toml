@@ -5,10 +5,12 @@ project_id = "la-catena"
 site_url = "https://redmamba06.github.io/la-catena/"
 additional_redirect_urls = ["https://redmamba06.github.io/la-catena/"]
 minimum_password_length = 8
+# account unico già creato: niente nuove registrazioni
+enable_signup = false
 
 [auth.email]
-# un solo utente: account creato dall'app, senza email di conferma
-enable_signup = true
+# accesso solo con l'account esistente, senza email di conferma
+enable_signup = false
 enable_confirmations = false
 
 [functions.notify]
