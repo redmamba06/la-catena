@@ -9,8 +9,8 @@ minimum_password_length = 8
 enable_signup = false
 
 [auth.email]
-# accesso solo con l'account esistente, senza email di conferma
-enable_signup = false
+# deve restare true: qui significa "accesso con email attivo", non "nuove registrazioni"
+enable_signup = true
 enable_confirmations = false
 
 [functions.notify]
