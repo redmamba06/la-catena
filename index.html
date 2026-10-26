@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <title>La Catena</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,9 +60,11 @@ body { margin: 0; min-height: 100vh; }
 .backup { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .backup button, .backup label { height: 46px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--bg); font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .backup input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.notif-code { width: 100%; height: 96px; resize: none; border-radius: 12px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); font-family: var(--f-mono); font-size: 11px; padding: 10px; }
-.notif-steps { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
-.notif-steps a { color: var(--accent); font-weight: 600; word-break: break-all; }
+.acct { display: flex; flex-direction: column; gap: 10px; }
+.acct input { height: 46px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--bg); padding: 0 14px; font-size: 16px; }
+.acct .err { color: var(--bad); }
+.banner.info { background: var(--surface); border: 1.5px solid var(--accent); }
+.banner.info h2 { color: var(--accent); }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.45;
   -webkit-tap-highlight-color: transparent;
@@ -261,6 +264,7 @@ button { cursor: pointer; }
   </header>
 
   <div id="banners" style="display:flex;flex-direction:column;gap:10px"></div>
+  <div id="acct-banner-box"></div>
 
   <section class="chain" id="chain" aria-live="polite">
     <div class="chain-num" id="chain-num">0</div>
@@ -318,25 +322,32 @@ button { cursor: pointer; }
     </div>
   </section>
 
-  <section class="card">
-    <div class="card-h"><h2>Notifiche</h2></div>
-    <p class="note">Alle 8 ti dico cosa hai in programma (o com'è andata ieri), alle 20 cosa ti manca per chiudere la giornata.</p>
-    <button class="btn-main" id="notif-btn" hidden></button>
-    <p class="note" id="notif-msg" hidden></p>
-    <div id="notif-setup" hidden style="display:flex;flex-direction:column;gap:10px">
-      <ol class="notif-steps">
-        <li>Copia il codice qui sotto.</li>
-        <li>Apri <a href="https://github.com/redmamba06/la-catena/settings/secrets/actions/new" target="_blank" rel="noopener">le impostazioni del repository su GitHub</a>.</li>
-        <li>Come nome scrivi <b>PUSH_SUBSCRIPTION</b>, incolla il codice e salva.</li>
-      </ol>
-      <textarea class="notif-code" id="notif-code" readonly aria-label="Codice notifiche"></textarea>
-      <div class="backup"><button id="notif-copy">Copia codice</button><button id="notif-test">Notifica di prova</button></div>
+  <section class="card" id="account">
+    <div class="card-h"><h2>Account</h2></div>
+    <form class="acct" id="login-form" hidden>
+      <p class="note">Entra per salvare i dati online: non li perdi se cancelli l'app o cambi telefono.</p>
+      <input id="login-email" type="email" autocomplete="username" inputmode="email" placeholder="Email" aria-label="Email" required>
+      <input id="login-pass" type="password" autocomplete="current-password" placeholder="Password (almeno 8 caratteri)" aria-label="Password" minlength="8" required>
+      <div class="backup"><button type="submit" id="login-in">Entra</button><button type="button" id="login-new">Crea account</button></div>
+      <p class="note err" id="login-msg" hidden></p>
+    </form>
+    <div class="acct" id="logged" hidden>
+      <p class="note">Collegato come <b id="logged-email"></b>. I dati si salvano online da soli.</p>
+      <button class="linkbtn" id="logout" style="align-self:flex-start">Esci</button>
     </div>
   </section>
 
   <section class="card">
+    <div class="card-h"><h2>Notifiche</h2></div>
+    <p class="note">Alle 8 ti dico cosa hai in programma (o com'è andata ieri), alle 20 cosa ti manca per chiudere la giornata.</p>
+    <button class="btn-main" id="notif-btn" hidden>Attiva notifiche</button>
+    <p class="note" id="notif-msg" hidden></p>
+    <div class="backup" id="notif-on" hidden><button id="notif-test">Notifica di prova</button><button id="notif-off">Disattiva</button></div>
+  </section>
+
+  <section class="card">
     <div class="card-h"><h2>Backup</h2></div>
-    <p class="note">I dati restano su questo telefono. Esporta un backup ogni tanto, e prima di cambiare telefono.</p>
+    <p class="note">Una copia dei tuoi dati in un file, da tenere per sicurezza.</p>
     <div class="backup">
       <button id="export">Esporta backup</button>
       <label for="import">Importa backup</label>
@@ -495,8 +506,9 @@ button { cursor: pointer; }
   // ---- persistence: localStorage subito, db del tuo account con debounce ----
   let db = null, docRef = null, saveTimer = null, writing = false, dirty = false;
   function save() {
+    state.savedAt = Date.now();
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
-    mirror();
+    mirror(); cloudSave();
     if (!docRef) return;
     dirty = true;
     clearTimeout(saveTimer);
@@ -972,8 +984,7 @@ button { cursor: pointer; }
     else if (todaySync) todaySync();
   }, 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
-  // ---- versione installabile: dati sul telefono, backup a mano ----
-  setSync("Salvato su questo telefono");
+  // ---- versione installabile ----
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
@@ -998,7 +1009,7 @@ button { cursor: pointer; }
     } catch (err) { msg("Questo file non è un backup di La Catena."); }
   };
 
-  // ---- notifiche: lo stato va in una cache che il service worker legge quando arriva la notifica ----
+  // copia dello stato per il service worker (notifiche di prova offline)
   function mirror() {
     if (!("caches" in window)) return;
     const body = JSON.stringify(state);
@@ -1006,17 +1017,113 @@ button { cursor: pointer; }
   }
   mirror();
 
+  // ---- account Supabase: dati online, ultimo salvataggio vince ----
+  const sb = window.supabase ? window.supabase.createClient("https://jthzincpedchogxnlzmi.supabase.co", "sb_publishable_bHLqSuhBA0m7VgCuhpItLA__-7Bd74r", { auth: { persistSession: true, autoRefreshToken: true, storageKey: "la-catena-auth" } }) : null;
+  let sbUser = null, cloudTimer = null, cloudBusy = false, cloudAgain = false;
+  const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Rome"; } catch (e) { return "Europe/Rome"; } })();
+
+  function cloudSave() {
+    if (!sbUser) return;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(cloudFlush, 800);
+  }
+  async function cloudFlush() {
+    if (!sbUser) return;
+    if (cloudBusy) { cloudAgain = true; return; }
+    cloudBusy = true;
+    const { error } = await sb.from("trackers").upsert({ user_id: sbUser.id, state, saved_at: state.savedAt || Date.now(), tz, updated_at: new Date().toISOString() });
+    cloudBusy = false;
+    setSync(error ? "Non salvato online (sei offline?). Riprovo al prossimo cambiamento." : "Salvato online");
+    if (cloudAgain) { cloudAgain = false; cloudFlush(); }
+  }
+  function useRemote(remote) {
+    state = hydrate(remote);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+    mirror(); todayBuiltFor = null; refresh();
+  }
+  async function cloudPull() {
+    if (!sbUser) return;
+    const { data, error } = await sb.from("trackers").select("state, saved_at").eq("user_id", sbUser.id).maybeSingle();
+    if (error) { setSync("Offline: salvato su questo telefono"); return; }
+    if (!data) { state.syncUser = sbUser.id; save(); return; }  // primo accesso: carica i dati di questo telefono
+    if (state.syncUser !== sbUser.id) {
+      // primo accesso da questo telefono con un account che ha già dati: unisce i giorni segnati qui
+      const m = hydrate(data.state);
+      for (const [k, v] of Object.entries(state.days || {})) if (!m.days[k]) m.days[k] = v;
+      if (state.start < m.start && Object.keys(state.days || {}).length) m.start = state.start;
+      m.syncUser = sbUser.id;
+      useRemote(m); save();
+      return;
+    }
+    if ((data.saved_at || 0) > (state.savedAt || 0)) { useRemote(data.state); setSync("Aggiornato dal tuo account"); }
+    else if ((data.saved_at || 0) < (state.savedAt || 0)) cloudFlush();
+    else setSync("Salvato online");
+  }
+
+  const loginForm = document.getElementById("login-form"), logged = document.getElementById("logged");
+  const loginMsg = t => { const m = document.getElementById("login-msg"); m.textContent = t; m.hidden = !t; };
+  function renderAccount() {
+    loginForm.hidden = !!sbUser || !sb;
+    logged.hidden = !sbUser;
+    if (sbUser) document.getElementById("logged-email").textContent = sbUser.email || "";
+    if (!sb) setSync("Salvato su questo telefono (servizio online non raggiungibile)");
+    else if (!sbUser) setSync("Salvato solo su questo telefono: entra nell'account per salvarlo online");
+    renderAccountBanner();
+    renderNotif().catch(() => {});
+  }
+  function renderAccountBanner() {
+    const box = document.getElementById("acct-banner-box");
+    const old = document.getElementById("acct-banner");
+    if (old) old.remove();
+    if (!sb || sbUser) return;
+    const b = el("div", "banner info"); b.id = "acct-banner";
+    b.append(el("h2", null, "Salva i dati sul tuo account"), el("p", null, "Così non li perdi se cancelli l'app o cambi telefono, e ricevi le notifiche puntuali."));
+    const go = el("button", null, "Entra o crea l'account");
+    go.onclick = () => { document.getElementById("account").scrollIntoView({ behavior: "smooth" }); document.getElementById("login-email").focus(); };
+    b.append(go); box.append(b);
+  }
+  const authError = e => {
+    const m = (e && e.message || "").toLowerCase();
+    if (m.includes("invalid login")) return "Email o password sbagliate.";
+    if (m.includes("already registered") || m.includes("already been registered")) return "Questa email ha già un account: tocca Entra.";
+    if (m.includes("password")) return "La password deve avere almeno 8 caratteri.";
+    if (m.includes("signups not allowed") || m.includes("signup is disabled")) return "La creazione di nuovi account è chiusa. Tocca Entra con il tuo account.";
+    if (m.includes("rate limit")) return "Troppi tentativi: riprova tra qualche minuto.";
+    return "Non riesco a collegarmi. Controlla la connessione e riprova.";
+  };
+  async function doAuth(create) {
+    const email = document.getElementById("login-email").value.trim(), password = document.getElementById("login-pass").value;
+    if (!email || password.length < 8) { loginMsg("Scrivi l'email e una password di almeno 8 caratteri."); return; }
+    loginMsg("");
+    const { data, error } = create ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
+    if (error) { loginMsg(authError(error)); return; }
+    if (create && !data.session) { loginMsg("Account creato: tocca Entra."); return; }
+  }
+  if (sb) {
+    loginForm.addEventListener("submit", e => { e.preventDefault(); doAuth(false); });
+    document.getElementById("login-new").onclick = () => doAuth(true);
+    document.getElementById("logout").onclick = async () => { await sb.auth.signOut(); };
+    sb.auth.onAuthStateChange((event, session) => {
+      const u = session ? session.user : null;
+      const changed = (u && u.id) !== (sbUser && sbUser.id);
+      sbUser = u;
+      if (changed) { renderAccount(); if (sbUser) cloudPull(); }
+    });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) cloudPull(); });
+  }
+
+  // ---- notifiche push: l'iscrizione del telefono va nel tuo account ----
   const VAPID_PUBLIC = "BF3Nbd4uhJhlTFkMDPPOlXYopoh6vN13jxpPTk-scXD4zMVzYJljiw0F2qXxB9RnWglcOj9Vsc5O5JY-leHpRDQ";
-  const nBtn = document.getElementById("notif-btn"), nMsg = document.getElementById("notif-msg");
-  const nSetup = document.getElementById("notif-setup"), nCode = document.getElementById("notif-code");
+  const nBtn = document.getElementById("notif-btn"), nOn = document.getElementById("notif-on"), nMsg = document.getElementById("notif-msg");
   const nNote = t => { nMsg.textContent = t; nMsg.hidden = !t; };
   const keyBytes = b64 => {
     const s = atob((b64 + "=".repeat((4 - b64.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
     return Uint8Array.from(s, ch => ch.charCodeAt(0));
   };
   const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const saveSub = sub => sb.from("push_subscriptions").upsert({ endpoint: sub.endpoint, user_id: sbUser.id, subscription: sub.toJSON() });
   async function renderNotif() {
-    nBtn.hidden = true; nSetup.hidden = true; nNote("");
+    nBtn.hidden = true; nOn.hidden = true; nNote("");
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
       const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
       nNote(ios && !standalone
@@ -1024,37 +1131,39 @@ button { cursor: pointer; }
         : "Questo browser non supporta le notifiche.");
       return;
     }
+    if (!sbUser) { nNote("Entra nel tuo account (qui sopra) per attivarle."); return; }
     if (Notification.permission === "denied") { nNote("Hai bloccato le notifiche. Riattivale nelle impostazioni del telefono, alla voce Notifiche → La Catena."); return; }
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (sub && Notification.permission === "granted") {
-      nCode.value = JSON.stringify(sub);
-      nSetup.hidden = false;
-      nNote("Notifiche attive su questo telefono. Se non l'hai già fatto, completa l'ultimo passo:");
-    } else {
-      nBtn.textContent = "Attiva notifiche";
-      nBtn.hidden = false;
-    }
+      const { error } = await saveSub(sub);
+      nNote(error ? "Notifiche attive sul telefono, ma non riesco a registrarle online. Riapri l'app con internet." : "Notifiche attive: alle 8 e alle 20.");
+      nOn.hidden = false;
+    } else nBtn.hidden = false;
   }
   nBtn.onclick = async () => {
     try {
       const perm = await Notification.requestPermission();
-      if (perm !== "granted") { renderNotif(); return; }
-      const reg = await navigator.serviceWorker.ready;
-      await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_PUBLIC) });
+      if (perm === "granted") {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_PUBLIC) });
+      }
     } catch (e) { nNote("Attivazione non riuscita. Riprova dall'app sulla schermata Home."); return; }
     renderNotif();
   };
-  document.getElementById("notif-copy").onclick = async () => {
-    try { await navigator.clipboard.writeText(nCode.value); nNote("Codice copiato. Ora incollalo su GitHub."); }
-    catch (e) { nCode.select(); nNote("Tieni premuto sul codice e scegli Copia."); }
-  };
   document.getElementById("notif-test").onclick = async () => {
-    const reg = await navigator.serviceWorker.ready;
-    mirror();
-    setTimeout(() => reg.active && reg.active.postMessage({ type: "test", kind: new Date().getHours() < 14 ? "morning" : "evening" }), 300);
+    nNote("Invio in corso…");
+    await cloudFlush();
+    const { data, error } = await sb.functions.invoke("notify", { body: { test: true, kind: new Date().getHours() < 14 ? "morning" : "evening" } });
+    nNote(error ? "Invio non riuscito. Controlla la connessione e riprova." : data && data.sent ? "Inviata: arriva tra qualche secondo." : "Nessun telefono registrato: tocca Disattiva e poi riattivale.");
   };
-  renderNotif().catch(() => {});
+  document.getElementById("notif-off").onclick = async () => {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) { await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); }
+    renderNotif();
+  };
+  renderAccount();
 })();
 </script>
 

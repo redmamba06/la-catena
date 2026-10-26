@@ -1,5 +1,5 @@
 // Cache per usare l'app anche offline, più le notifiche. Cambia VERSION a ogni aggiornamento.
-const VERSION = "la-catena-v7";
+const VERSION = "la-catena-v8";
 const STATE_CACHE = "la-catena-state"; // copia dello stato scritta dalla pagina, letta qui per comporre le notifiche
 const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
@@ -16,7 +16,7 @@ self.addEventListener("fetch", e => {
   // rete prima (così prendi gli aggiornamenti), cache se sei offline
   e.respondWith(
     fetch(e.request).then(res => {
-      if (res.ok && (e.request.url.startsWith(self.location.origin) || e.request.url.includes("fonts.g"))) {
+      if (res.ok && (e.request.url.startsWith(self.location.origin) || e.request.url.includes("fonts.g") || e.request.url.startsWith("https://cdn.jsdelivr.net/"))) {
         const copy = res.clone();
         caches.open(VERSION).then(c => c.put(e.request, copy));
       }
@@ -98,9 +98,13 @@ async function notify(kind, tag) {
 }
 
 self.addEventListener("push", e => {
-  let kind = "evening";
-  try { kind = e.data.json().kind || kind; } catch (err) {}
-  e.waitUntil(notify(kind, "la-catena-" + kind));
+  let data = {};
+  try { data = e.data.json() || {}; } catch (err) {}
+  const kind = data.kind || "evening", tag = "la-catena-" + kind;
+  // il server (Supabase) manda già titolo e testo; senza, li compone il telefono
+  e.waitUntil(data.title
+    ? self.registration.showNotification(data.title, { body: data.body, icon: "icon-192.png", badge: "icon-192.png", tag })
+    : notify(kind, tag));
 });
 self.addEventListener("message", e => {
   if (e.data && e.data.type === "test") e.waitUntil(notify(e.data.kind || "evening", "la-catena-test"));

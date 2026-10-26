@@ -1,0 +1,15 @@
+# Solo le impostazioni che La Catena usa sul progetto remoto (niente sviluppo locale).
+project_id = "la-catena"
+
+[auth]
+site_url = "https://redmamba06.github.io/la-catena/"
+additional_redirect_urls = ["https://redmamba06.github.io/la-catena/"]
+minimum_password_length = 8
+
+[auth.email]
+# un solo utente: account creato dall'app, senza email di conferma
+enable_signup = true
+enable_confirmations = false
+
+[functions.notify]
+verify_jwt = false
