@@ -19,7 +19,7 @@ head, rest = html[:head_end], html[head_end:]
 html = (
     '<!doctype html>\n<html lang="it">\n<head>\n'
     '<meta charset="utf-8">\n'
-    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+    '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">\n'
     '<meta name="theme-color" content="#EDEFF3" media="(prefers-color-scheme: light)">\n'
     '<meta name="theme-color" content="#0E1014" media="(prefers-color-scheme: dark)">\n'
     '<meta name="apple-mobile-web-app-capable" content="yes">\n'
@@ -35,7 +35,7 @@ html = (
 
 rep("* { box-sizing: border-box; }",
     "* { box-sizing: border-box; }\n"
-    "html { -webkit-text-size-adjust: 100%; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }\n"
+    "html { -webkit-text-size-adjust: 100%; touch-action: manipulation; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }\n"
     "body { margin: 0; min-height: 100vh; }\n"
     "[hidden] { display: none !important; }\n"
     ".backup { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }\n"
@@ -97,6 +97,9 @@ rep('''  let tries = 0;
     else setSync("Salvato solo in questo browser");
   })();''',
 '''  // ---- versione installabile ----
+  // niente zoom: iOS ignora user-scalable=no, quindi blocca anche il pinch a due dita
+  ["gesturestart", "gesturechange", "gestureend"].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener("touchmove", e => { if (e.touches.length > 1 || (e.scale !== undefined && e.scale !== 1)) e.preventDefault(); }, { passive: false });
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
