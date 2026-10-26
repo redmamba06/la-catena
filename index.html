@@ -217,6 +217,22 @@ button { cursor: pointer; }
 .sheet .card { padding: 0; }
 .btn-main { height: 50px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 16px; }
 
+.book-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.book-line > span { min-width: 0; overflow-wrap: anywhere; }
+.book-line b { color: var(--ink); }
+.linkbtn { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 14px; padding: 6px 0; flex: none; }
+.newbook { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: var(--bg); }
+.newbook input[type="text"] { height: 44px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); padding: 0 12px; font-size: 16px; }
+.newbook .acts { display: flex; gap: 14px; align-items: center; }
+.newbook .btn-main { flex: 1; height: 44px; font-size: 15px; }
+.pages-box { display: flex; flex-direction: column; gap: 8px; }
+.from { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.from input {
+  width: 92px; height: 44px; text-align: center; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface);
+  font-family: var(--f-mono); font-weight: 700; font-size: 16px;
+}
+.lbl { font-size: 14px; color: var(--muted); }
+.warn-note { color: var(--bad); }
 .timer {
   height: 48px; border-radius: 12px; border: 1.5px dashed var(--accent); background: transparent; color: var(--accent);
   font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -375,7 +391,7 @@ button { cursor: pointer; }
     { lesson: 4, study: 3, gym: true, pages: 10 }, { lesson: 0, study: 2, gym: true, pages: 10 },
     { lesson: 0, study: 2, gym: false, pages: 10 },
   ];
-  const fresh = () => ({ goals: { jolly: 1 }, plans: [{ from: todayKey(), days: defaultWeek() }], start: todayKey(), days: {}, timer: null });
+  const fresh = () => ({ goals: { jolly: 1 }, plans: [{ from: todayKey(), days: defaultWeek() }], start: todayKey(), days: {}, books: [], timer: null });
   const hydrate = obj => {
     const s = Object.assign(fresh(), obj), og = obj.goals || {};
     s.goals = { jolly: og.jolly ?? 1 };
@@ -395,6 +411,35 @@ button { cursor: pointer; }
     if (k < state.start && k < todayKey()) state.start = k; // correggere un giorno passato lo fa entrare nel conto
     save();
     refresh();
+  }
+
+  // ---- libro e segnalibro: pagine lette = "arrivato a" meno "partito da" ----
+  // Ogni giorno riparte dalla pagina a cui eri arrivato l'ultima volta con lo stesso libro.
+  const bookFor = k => { let b = null; for (const x of state.books) if (x.start <= k) b = x; return b; };
+  function startPageFor(k) {
+    const b = bookFor(k);
+    if (!b) return 0;
+    const r = rec(k);
+    if (r.bid === b.id && r.ps != null) return r.ps;
+    const prev = Object.keys(state.days)
+      .filter(d => d < k && d >= b.start && state.days[d].bid === b.id && state.days[d].pe != null).sort().pop();
+    return prev ? state.days[prev].pe : b.startPage;
+  }
+  function setReading(k, ps, pe) {
+    const b = bookFor(k);
+    if (!b) return;
+    const read = pe == null ? 0 : Math.max(0, pe - ps);
+    setDay(k, { bid: b.id, ps, pe, p: (rec(k).pPrev || 0) + read });
+  }
+  function newBook(title, startPage) {
+    const t = todayKey(), r = rec(t);
+    const replacing = state.books.some(b => b.start === t); // libro sbagliato iniziato oggi: lo sostituisce
+    state.books = state.books.filter(b => b.start !== t);
+    const id = Date.now().toString(36);
+    state.books.push({ id, title, start: t, startPage });
+    // le pagine già lette oggi (libro precedente) restano nel conto di oggi
+    const pPrev = replacing ? (r.pPrev || 0) : (r.p || 0);
+    setDay(t, { bid: id, ps: null, pe: null, pPrev, p: pPrev });
   }
 
   function planFor(k) {
@@ -557,20 +602,74 @@ button { cursor: pointer; }
     const rP = el("div", "row");
     const vP = el("span", "row-v");
     const hP = el("div", "row-h"); hP.append(el("span", "row-t", "Lettura serale"), vP);
+    const sfx = isToday ? "t" : "e";
+    const numInput = (id, label) => {
+      const i = el("input"); Object.assign(i, { type: "number", min: "0", step: "1", id }); i.setAttribute("inputmode", "numeric");
+      i.setAttribute("aria-label", label); return i;
+    };
+
+    // libro in corso
+    const bookLine = el("div", "book-line");
+    const bookLabel = el("span"), bookTitle = el("b");
+    const bookName = el("span"); bookName.append(bookLabel, bookTitle);
+    const newBookBtn = el("button", "linkbtn", "Nuovo libro");
+    bookLine.append(bookName, newBookBtn);
+
+    // form "nuovo libro" (solo oggi)
+    const nb = el("div", "newbook"); nb.hidden = true;
+    const nbTitle = el("input"); Object.assign(nbTitle, { type: "text", id: `nbt-${k}-${sfx}`, placeholder: "Titolo del libro (facoltativo)", autocomplete: "off" });
+    nbTitle.setAttribute("aria-label", "Titolo del libro");
+    const nbPage = numInput(`nbp-${k}-${sfx}`, "Pagina da cui parti"); nbPage.value = "0";
+    const nbFrom = el("label", "from"); nbFrom.append("Parto da pagina", nbPage);
+    const nbGo = el("button", "btn-main", "Inizia il libro");
+    const nbCancel = el("button", "linkbtn", "Annulla");
+    const nbActs = el("div", "acts"); nbActs.append(nbGo, nbCancel);
+    nb.append(nbTitle, nbFrom, nbActs);
+    newBookBtn.onclick = () => { nb.hidden = false; newBookBtn.hidden = true; nbCancel.hidden = false; nbTitle.focus(); };
+    nbCancel.onclick = () => { nb.hidden = true; sync(); };
+    nbGo.onclick = () => {
+      const sp = parseInt(nbPage.value, 10);
+      newBook(nbTitle.value.trim(), isNaN(sp) ? 0 : Math.max(0, sp));
+      nbTitle.value = ""; nbPage.value = "0"; nb.hidden = true; sync();
+    };
+    if (isToday && !bookFor(k)) { nb.hidden = false; nbCancel.hidden = true; }
+
+    // da pagina → arrivato a pagina
+    const pagesBox = el("div", "pages-box");
+    const inPs = numInput(`ps-${k}-${sfx}`, "Da pagina");
+    const fromLbl = el("label", "from"); fromLbl.append("Da pagina", inPs);
+    const toLbl = el("span", "lbl", "Arrivato a pagina");
     const stP = el("div", "stepper");
     const minusP = el("button", null, "−"); minusP.setAttribute("aria-label", "Una pagina in meno");
-    const inP = el("input"); Object.assign(inP, { type: "number", inputmode: "numeric", step: "1", min: "0", id: `p-${k}-${isToday ? "t" : "e"}` });
-    inP.setAttribute("aria-label", "Pagine lette");
+    const inPe = numInput(`pe-${k}-${sfx}`, "Arrivato a pagina");
     const plusP = el("button", null, "+"); plusP.setAttribute("aria-label", "Una pagina in più");
     const plus5 = el("button", "quick", "+5");
-    stP.append(minusP, inP, plusP, plus5);
-    const barP = el("div", "bar"); const barPi = el("i"); barP.append(barPi);
-    rP.append(hP, stP, barP);
-    const setP = v => setDay(k, { p: Math.max(0, Math.min(2000, Math.round(v))) });
-    minusP.onclick = () => setP((rec(k).p || 0) - 1);
-    plusP.onclick = () => setP((rec(k).p || 0) + 1);
-    plus5.onclick = () => setP((rec(k).p || 0) + 5);
+    stP.append(minusP, inPe, plusP, plus5);
+    const pagesNote = el("p", "note");
+    pagesBox.append(fromLbl, toLbl, stP, pagesNote);
+    const stepEnd = d => { const ps = startPageFor(k), r = rec(k); setReading(k, ps, Math.max(0, (r.pe ?? ps) + d)); };
+    minusP.onclick = () => stepEnd(-1);
+    plusP.onclick = () => stepEnd(1);
+    plus5.onclick = () => stepEnd(5);
+    inPe.oninput = () => {
+      const v = parseInt(inPe.value, 10);
+      if (inPe.value.trim() === "") setReading(k, startPageFor(k), null);
+      else if (!isNaN(v)) setReading(k, startPageFor(k), Math.max(0, v));
+    };
+    inPs.onchange = () => {
+      const v = parseInt(inPs.value, 10);
+      if (!isNaN(v)) setReading(k, Math.max(0, v), rec(k).pe ?? null);
+      else sync();
+    };
+
+    // giorni passati senza libro: pagine a mano
+    const manual = el("div", "stepper");
+    const inP = numInput(`p-${k}-${sfx}`, "Pagine lette");
+    manual.append(inP);
     inP.oninput = () => { const v = parseInt(inP.value, 10); if (!isNaN(v)) setDay(k, { p: Math.max(0, v) }); };
+
+    const barP = el("div", "bar"); const barPi = el("i"); barP.append(barPi);
+    rP.append(hP, bookLine, nb, pagesBox, manual, barP);
 
     // Giorno jolly
     const rJ = el("div", "row");
@@ -623,7 +722,24 @@ button { cursor: pointer; }
       dots.innerHTML = Array.from({ length: Math.max(target, wk) }, (_, i) => `<i class="${i < wk ? "on" : ""}"></i>`).join("");
       vP.className = "row-v" + (p >= g.pages ? " done" : "");
       vP.innerHTML = g.pages > 0 ? `<b>${p}</b> / ${g.pages} pag.` : `<b>${p}</b> pag. · libero`;
-      if (document.activeElement !== inP) inP.value = p;
+      const b = bookFor(k), act = document.activeElement;
+      bookLabel.textContent = b ? "Libro: " : isToday ? "Che libro stai leggendo?" : "Nessun libro segnato";
+      bookTitle.textContent = b ? (b.title || "senza titolo") : "";
+      newBookBtn.hidden = !isToday || !nb.hidden;
+      newBookBtn.textContent = b ? "Nuovo libro" : "Inizia un libro";
+      pagesBox.hidden = !b;
+      manual.hidden = !!b || isToday;
+      if (b) {
+        const ps = startPageFor(k);
+        if (act !== inPs) inPs.value = ps;
+        if (act !== inPe) inPe.value = r.pe ?? "";
+        inPe.placeholder = String(ps);
+        const bad = r.pe != null && r.pe < ps;
+        pagesNote.className = "note" + (bad ? " warn-note" : "");
+        pagesNote.textContent = bad ? "La pagina di arrivo è prima di quella di partenza."
+          : r.pe != null ? `${r.pe - ps} pagine${r.pPrev ? ` + ${r.pPrev} dell'altro libro` : ""}. Domani riparti da pagina ${r.pe}.`
+          : "Scrivi la pagina a cui arrivi stasera.";
+      } else if (act !== inP) inP.value = p;
       barPi.style.width = pct(p, g.pages) + "%";
       barP.classList.toggle("done", p >= g.pages);
       status.className = "status" + (ev.done ? " ok" : "");

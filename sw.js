@@ -1,5 +1,5 @@
 // Cache per usare l'app anche offline, più le notifiche. Cambia VERSION a ogni aggiornamento.
-const VERSION = "la-catena-v6";
+const VERSION = "la-catena-v7";
 const STATE_CACHE = "la-catena-state"; // copia dello stato scritta dalla pagina, letta qui per comporre le notifiche
 const CORE = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
